@@ -20,6 +20,7 @@ A python package for decoding ABS-D messages.
 from __future__ import absolute_import, print_function, division
 import math
 from . import util
+from . import modes_common
 
 
 def df(msg):
@@ -68,19 +69,19 @@ def typecode(msg):
 # Aircraft Identification
 # ---------------------------------------------
 def category(msg):
-    """Aircraft category number
+	"""Aircraft category number
 
-    Args:
-        msg (string): 28 bytes hexadecimal message string
+	Args:
+		msg (string): 28 bytes hexadecimal message string
 
-    Returns:
-        int: category number
-    """
-
-    if typecode(msg) < 1 or typecode(msg) > 4:
-        raise RuntimeError("%s: Not a identification message" % msg)
-    msgbin = util.hex2bin(msg)
-    return util.bin2int(msgbin[5:8])
+	Returns:
+		int: category number
+	"""
+	if df(msg) != 17:
+		raise RuntimeError("%s: Not a DF 17 message" % msg)
+		
+	msgbin = util.hex2bin(msg)
+	return util.bin2int(msgbin[5:8])
 
 
 def callsign(msg):
@@ -115,7 +116,47 @@ def callsign(msg):
     cs = cs.replace('#', '')
     return cs
 
+def df17tc28id(msg):
+	"""Get identity (squawk code) from DF17 message - type code 28.
 
+	Args:
+		msg (string): 28 bytes hexadecimal message string
+
+	Returns:
+		string: squawk code
+	"""
+	return modes_common.idcode_df17_tc28(msg)
+	
+def emitter_cat(msg):
+	"""ADSB Aircraft Emitter Category, bit 6-8.
+	
+	Args:
+		msg (string): 112 bits hexadecimal message string
+
+	Returns:
+		str:  ADSB Emitter Category 
+		
+	Info:
+		Identify particular aircraft or vehicle types within the
+		ADSB Emitter Category Sets A, B, C or D identified by
+		Message Format TYPE Codes 4, 3, 2 and 1, respectively.
+	"""
+	
+	msgbin = util.hex2bin(msg)
+	ec = util.bin2int(msgbin[37:40])
+	
+	if typecode(msg) == 1:
+		ec_res = "SET D CODE %d" % ec
+	elif typecode(msg) == 2:
+		ec_res = "SET C CODE %d" % ec
+	elif typecode(msg) == 3:
+		ec_res = "SET B CODE %d" % ec
+	elif typecode(msg) == 4:
+		ec_res = "SET A CODE %d" % ec
+	else:
+		raise RuntimeError("%s: Not a identification message" % msg)
+		
+	return ec_res
 # ---------------------------------------------
 # Positions
 # ---------------------------------------------
@@ -266,9 +307,10 @@ def position_with_ref(msg, lat_ref, lon_ref):
     of the true position.
 
     Args:
-        msg (string): even message (28 bytes hexadecimal string)
-        lat_ref: previous known latitude
-        lon_ref: previous known longitude
+        msg0 (string): even message (28 bytes hexadecimal string)
+        msg1 (string): odd message (28 bytes hexadecimal string)
+        t0 (int): timestamps for the even message
+        t1 (int): timestamps for the odd message
 
     Returns:
         (float, float): (latitude, longitude) of the aircraft
@@ -532,6 +574,46 @@ def nic(msg):
         nic = -1
     return nic
 
+def nic_c(msg):
+	"""Calculate NIC, navigation integrity category for messages with Type Codes
+	(0, 5-8, 20-22)
+
+	Args:
+		msg (string): 28 bytes hexadecimal message string
+
+	Returns:
+		int: NIC number (from 0 to 11), -1 if not applicable.
+	"""
+
+	msgbin = util.hex2bin(msg)
+	tc = typecode(msg)
+	# nic_sup_a = util.bin2int(msgbin[75]) // TODO.txt 1.
+	nic_sup_b = util.bin2int(msgbin[39])  
+	# nic_sup_c = util.bin2int(msgbin[51]) // TODO.txt 1.
+	tcnum = (0, 5, 6, 7, 8, 20, 21, 22)
+	
+	if tc not in tcnum:
+		raise RuntimeError("%s: Not a NIC_C message, expecting TC (0, 5-8, 20-22)" % msg)
+		
+	if tc == 5:
+		nic = 11
+	elif tc == 6:
+		nic = 10
+	elif tc == 7:
+		nic = "9 or 8" # // TODO.txt 1.
+	elif tc == 8:
+		nic = "7 or 6 or 0" # TODO.txt 1.
+	elif tc == 20:
+		nic = 11
+	elif tc == 21:
+		nic = 10
+	elif tc == 22:
+		nic = 0
+	elif tc == 0:
+		nic = 0
+	else:
+		nic = -1
+	return nic
 
 # ---------------------------------------------
 # Velocity
@@ -545,7 +627,7 @@ def velocity(msg):
         msg (string): 28 bytes hexadecimal message string
 
     Returns:
-        (int, float, int, string): speed (kt), ground track or heading (degree),
+        (int, float, int, string): speed (kt), heading (degree),
             rate of climb/descend (ft/min), and speed type
             ('GS' for ground speed, 'AS' for airspeed)
     """
@@ -560,17 +642,17 @@ def velocity(msg):
         raise RuntimeError("incorrect or inconsistant message types, expecting 4<TC<9 or TC=19")
 
 def speed_heading(msg):
-    """Get speed and ground track (or heading) from the velocity message
+    """Get speed and heading only from the velocity message
     (handles both airborne or surface message)
 
     Args:
         msg (string): 28 bytes hexadecimal message string
 
     Returns:
-        (int, float): speed (kt), ground track or heading (degree)
+        (int, float): speed (kt), heading (degree)
     """
-    spd, trk_or_hdg, rocd, tag = velocity(msg)
-    return spd, trk_or_hdg
+    spd, hdg, rocd, tag = velocity(msg)
+    return spd, hdg
 
 
 def airborne_velocity(msg):
@@ -580,7 +662,7 @@ def airborne_velocity(msg):
         msg (string): 28 bytes hexadecimal message string
 
     Returns:
-        (int, float, int, string): speed (kt), ground track or heading (degree),
+        (int, float, int, string): speed (kt), heading (degree),
             rate of climb/descend (ft/min), and speed type
             ('GS' for ground speed, 'AS' for airspeed)
     """
@@ -592,9 +674,6 @@ def airborne_velocity(msg):
 
     subtype = util.bin2int(msgbin[37:40])
 
-    if util.bin2int(msgbin[46:56]) == 0 or util.bin2int(msgbin[57:67]) == 0:
-        return None
-
     if subtype in (1, 2):
         v_ew_sign = -1 if int(msgbin[45]) else 1
         v_ew = util.bin2int(msgbin[46:56]) - 1       # east-west velocity
@@ -602,31 +681,28 @@ def airborne_velocity(msg):
         v_ns_sign = -1 if int(msgbin[56]) else 1
         v_ns = util.bin2int(msgbin[57:67]) - 1       # north-south velocity
 
-
         v_we = v_ew_sign * v_ew
         v_sn = v_ns_sign * v_ns
 
         spd = math.sqrt(v_sn*v_sn + v_we*v_we)  # unit in kts
 
-        trk = math.atan2(v_we, v_sn)
-        trk = math.degrees(trk)                 # convert to degrees
-        trk = trk if trk >= 0 else trk + 360    # no negative val
+        hdg = math.atan2(v_we, v_sn)
+        hdg = math.degrees(hdg)                 # convert to degrees
+        hdg = hdg if hdg >= 0 else hdg + 360    # no negative val
 
         tag = 'GS'
-        trk_or_hdg = trk
 
     else:
         hdg = util.bin2int(msgbin[46:56]) / 1024.0 * 360.0
         spd = util.bin2int(msgbin[57:67])
 
         tag = 'AS'
-        trk_or_hdg = hdg
 
     vr_sign = -1 if int(msgbin[68]) else 1
     vr = (util.bin2int(msgbin[69:78]) - 1) * 64     # vertical rate, fpm
     rocd = vr_sign * vr
 
-    return int(spd), round(trk_or_hdg, 1), int(rocd), tag
+    return round(float(spd), 3), round(hdg, 3), int(rocd), tag
 
 
 def surface_velocity(msg):
