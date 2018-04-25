@@ -68,19 +68,19 @@ def typecode(msg):
 # Aircraft Identification
 # ---------------------------------------------
 def category(msg):
-	"""Aircraft category number
+    """Aircraft category number
 
-	Args:
-		msg (string): 28 bytes hexadecimal message string
+    Args:
+        msg (string): 28 bytes hexadecimal message string
 
-	Returns:
-		int: category number
-	"""
-	if df(msg) != 17:
-		raise RuntimeError("%s: Not a DF 17 message" % msg)
-		
-	msgbin = util.hex2bin(msg)
-	return util.bin2int(msgbin[5:8])
+    Returns:
+        int: category number
+    """
+
+    if typecode(msg) < 1 or typecode(msg) > 4:
+        raise RuntimeError("%s: Not a identification message" % msg)
+    msgbin = util.hex2bin(msg)
+    return util.bin2int(msgbin[5:8])
 
 
 def callsign(msg):
@@ -115,37 +115,7 @@ def callsign(msg):
     cs = cs.replace('#', '')
     return cs
 
-	
-def emitter_cat(msg):
-	"""ADSB Aircraft Emitter Category, bit 6-8.
-	
-	Args:
-		msg (string): 112 bits hexadecimal message string
 
-	Returns:
-		str:  ADSB Emitter Category 
-		
-	Info:
-		Identify particular aircraft or vehicle types within the
-		ADSB Emitter Category Sets A, B, C or D identified by
-		Message Format TYPE Codes 4, 3, 2 and 1, respectively.
-	"""
-	
-	msgbin = util.hex2bin(msg)
-	ec = util.bin2int(msgbin[37:40])
-	
-	if typecode(msg) == 1:
-		ec_res = "SET D CODE %d" % ec
-	elif typecode(msg) == 2:
-		ec_res = "SET C CODE %d" % ec
-	elif typecode(msg) == 3:
-		ec_res = "SET B CODE %d" % ec
-	elif typecode(msg) == 4:
-		ec_res = "SET A CODE %d" % ec
-	else:
-		raise RuntimeError("%s: Not a identification message" % msg)
-		
-	return ec_res
 # ---------------------------------------------
 # Positions
 # ---------------------------------------------
@@ -562,46 +532,6 @@ def nic(msg):
         nic = -1
     return nic
 
-def nic_c(msg):
-	"""Calculate NIC, navigation integrity category for messages with Type Codes
-	(0, 5-8, 20-22)
-
-	Args:
-		msg (string): 28 bytes hexadecimal message string
-
-	Returns:
-		int: NIC number (from 0 to 11), -1 if not applicable.
-	"""
-
-	msgbin = util.hex2bin(msg)
-	tc = typecode(msg)
-	# nic_sup_a = util.bin2int(msgbin[75]) // TODO.txt 1.
-	nic_sup_b = util.bin2int(msgbin[39])  
-	# nic_sup_c = util.bin2int(msgbin[51]) // TODO.txt 1.
-	tcnum = (0, 5, 6, 7, 8, 20, 21, 22)
-	
-	if tc not in tcnum:
-		raise RuntimeError("%s: Not a NIC_C message, expecting TC (0, 5-8, 20-22)" % msg)
-		
-	if tc == 5:
-		nic = 11
-	elif tc == 6:
-		nic = 10
-	elif tc == 7:
-		nic = "9 or 8" # // TODO.txt 1.
-	elif tc == 8:
-		nic = "7 or 6 or 0" # TODO.txt 1.
-	elif tc == 20:
-		nic = 11
-	elif tc == 21:
-		nic = 10
-	elif tc == 22:
-		nic = 0
-	elif tc == 0:
-		nic = 0
-	else:
-		nic = -1
-	return nic
 
 # ---------------------------------------------
 # Velocity
@@ -644,7 +574,7 @@ def speed_heading(msg):
 
 
 def airborne_velocity(msg):
-    """Calculate the speed, heading, and vertical rate
+    """Calculate the speed, track (or heading), and vertical rate
 
     Args:
         msg (string): 28 bytes hexadecimal message string
@@ -705,7 +635,7 @@ def surface_velocity(msg):
         msg (string): 28 bytes hexadecimal message string
 
     Returns:
-        (int, float, int, string): speed (kt), heading (degree),
+        (int, float, int, string): speed (kt), ground track (degree),
             rate of climb/descend (ft/min), and speed type
             ('GS' for ground speed, 'AS' for airspeed)
     """
@@ -715,13 +645,13 @@ def surface_velocity(msg):
 
     msgbin = util.hex2bin(msg)
 
-    # heading
-    hdg_status = int(msgbin[44])
-    if hdg_status == 1:
-        hdg = util.bin2int(msgbin[45:52]) * 360.0 / 128.0
-        hdg = round(hdg, 1)
+    # ground track
+    trk_status = int(msgbin[44])
+    if trk_status == 1:
+        trk = util.bin2int(msgbin[45:52]) * 360.0 / 128.0
+        trk = round(trk, 1)
     else:
-        hdg = None
+        trk = None
 
     # ground movment / speed
     mov = util.bin2int(msgbin[37:44])
@@ -740,7 +670,7 @@ def surface_velocity(msg):
         spd = kts[i-1] + (mov-movs[i-1]) * step
         spd = round(spd, 2)
 
-    return spd, hdg, 0, 'GS'
+    return spd, trk, 0, 'GS'
 
 def altitude_diff(msg):
     """Decode the differece between GNSS and barometric altitude

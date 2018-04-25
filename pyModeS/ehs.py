@@ -336,7 +336,7 @@ def isBDS44(msg, rev=False):
         # Bits 1-4 are reserved and should be zero
         if util.bin2int(d[0:4]) != 0:
             result &= False
-        
+
     if not result:
         return False
 
@@ -621,7 +621,7 @@ def rtrk50(msg):
     if d[36:45] == "111111111":
         return None
 
-    sign = int(d[35])    # 1 -> minus
+    sign = int(d[35])    # 1 -> negative value, two's complement
     value = util.bin2int(d[36:45])
     if sign:
         value = value - 512
@@ -794,12 +794,15 @@ def vr53(msg):
     if d[46] == '0':
         return None
 
-    sign = d[47]    # 1 -> minus
+    sign = int(d[47])    # 1 -> negative value, two's complement
     value = util.bin2int(d[48:56])
 
-    if sign:
-        value = value - 256
+    if value == 0 or value == 255:  # all zeros or all ones
+        return 0
+
+    value = value - 256 if sign else value
     roc = value * 64     # feet/min
+
     return roc
 
 
@@ -925,11 +928,13 @@ def vr60baro(msg):
     if d[34] == '0':
         return None
 
-    sign = d[35]    # 1 -> minus
+    sign = int(d[35])    # 1 -> negative value, two's complement
     value = util.bin2int(d[36:45])
 
-    if sign:
-        value = value - 512
+    if value == 0 or value == 511:  # all zeros or all ones
+        return 0
+
+    value = value - 512 if sign else value
 
     roc = value * 32   # feet/min
     return roc
@@ -949,11 +954,13 @@ def vr60ins(msg):
     if d[45] == '0':
         return None
 
-    sign = d[46]    # 1 -> minus
+    sign = int(d[46])    # 1 -> negative value, two's complement
     value = util.bin2int(d[47:56])
 
-    if sign:
-        value = value - 512
+    if value == 0 or value == 511:  # all zeros or all ones
+        return 0
+
+    value = value - 512 if sign else value
 
     roc = value * 32   # feet/min
     return roc

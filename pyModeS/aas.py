@@ -7,12 +7,13 @@ from __future__ import absolute_import, print_function, division
 import math
 from . import util
 from . import modes_common
+from . import modes_common_ps
 
 def icao(msg):
 	if util.df(msg) not in (0, 16):
 		raise RuntimeError("Message must be Downlink Format 0 or 16.")
 	
-	return modes_common.icao(msg)
+	return modes_common_ps.icao(msg)
 	
 def alt(msg):
 	"""Computes the altitude from DF0, DF16 message, bit 20-32
@@ -27,7 +28,7 @@ def alt(msg):
 	if util.df(msg) not in (0, 16):
 		raise RuntimeError("Message must be Downlink Format 0 or 16.")
 
-	return modes_common.altcode(msg)
+	return modes_common_ps.altcode(msg)
 
 def vs(msg):
 	"""Get the Vertical status, bit 6.

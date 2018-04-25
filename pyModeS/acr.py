@@ -6,6 +6,7 @@ from __future__ import absolute_import, print_function, division
 import math
 from . import util
 from . import modes_common
+from . import modes_common_ps
 
 def icao(msg):
 	"""Get the ICAO 24 bits address, bit 9-32.
