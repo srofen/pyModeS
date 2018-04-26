@@ -60,8 +60,10 @@ def clic(msg):
 	
 	if util.df(msg) != 11:
 		raise RuntimeError("Message must be Downlink Format 11")
-	cl = util.crc(msg, encode=False)[17:20]
-	ic = util.crc(msg, encode=False)[20:]
+	#cl = util.crc(msg, encode=False)[17:20] removed because adsb receiver encodes massage by himself.
+	#ic = util.crc(msg, encode=False)[20:] removed because adsb receiver encodes massage by himself.
+	cl = util.hex2bin(msg)[-7:-4]
+	ic = util.hex2bin(msg)[-4:]
 	
 	if cl == "000":
 		iid = "II %d" % int(ic, 2)
@@ -76,6 +78,7 @@ def clic(msg):
 	elif cl == "100":
 		iid = "SI %d" % (48 + int(ic, 2))
 	else:
-		raise RuntimeError("%s not valid" % cl)
+		#raise RuntimeError("%s not valid" % cl)
+		iid = "Wrong CL Code" 
 		
 	return iid
